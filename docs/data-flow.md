@@ -10,7 +10,7 @@
 ```mermaid
 flowchart LR
   subgraph SRC["① 1次データ（店主から受領）"]
-    POS["レジ売上CSV<br/>pos_sales_YYYYMMDD.csv<br/>×約52日分"]
+    POS["レジ売上CSV<br/>pos_sales_YYYYMMDD.csv<br/>×53日分（日曜定休）"]
     MENU["メニュー表<br/>menu.xlsx"]
     STAFF["スタッフ名簿<br/>staff.xlsx"]
     SEAT["席一覧<br/>seats.txt"]
