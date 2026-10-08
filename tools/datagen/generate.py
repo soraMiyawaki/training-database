@@ -3,14 +3,12 @@
   python generate.py            # data/source/ と data/answer/ を再生成
   python generate.py --seed 7   # 乱数を変える
 
-data/external/weather.json, holidays.json があれば実データを使い、
-なければ固定シードの代替データ（雨の日）と内蔵の祝日表を使う。
-出力は seed と外部データが同じなら毎回同一になる。
+天気（降水量）は乱数で作る架空の値で、来客数を増減させる隠れた要因として使う。
+研修生に渡す 1次データには含めない。出力は seed が同じなら毎回同一になる。
 """
 import argparse
 import csv
 import datetime as dt
-import json
 import pathlib
 import random
 import shutil
@@ -19,7 +17,6 @@ from collections import defaultdict
 from openpyxl import Workbook
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-EXT = ROOT / "data" / "external"
 SRC = ROOT / "data" / "source"
 ANS = ROOT / "data" / "answer"
 
@@ -27,8 +24,8 @@ START = dt.date(2026, 8, 1)
 END = dt.date(2026, 9, 30)
 PRICE_UP = dt.date(2026, 9, 1)
 CLOSED = {dt.date(2026, 8, 13), dt.date(2026, 8, 14), dt.date(2026, 8, 15)}  # お盆の臨時休業
-# 内閣府「国民の祝日」2026年8〜9月分。holidays.json があればそちらを優先する
-BUILTIN_HOLIDAYS = {"2026-08-11": "山の日", "2026-09-21": "敬老の日",
+# 内閣府「国民の祝日」2026年8〜9月分
+HOLIDAYS = {"2026-08-11": "山の日", "2026-09-21": "敬老の日",
                     "2026-09-22": "国民の休日", "2026-09-23": "秋分の日"}
 
 # (コード, 商品名, カテゴリ, 旧価格, 新価格, 種別, 販売開始, 販売終了)
@@ -73,17 +70,6 @@ SEATS = [(f"T{i}", "テーブル", 4) for i in range(1, 5)] + \
 POS_HEADER = ["伝票番号", "明細番号", "来店日時", "卓番", "客数", "担当者", "商品コード", "商品名",
               "カテゴリ", "単価", "数量", "小計", "取消区分", "支払方法", "伝票合計"]
 DUPLICATED_DAY = dt.date(2026, 9, 4)  # D-03
-
-
-def load_external():
-    weather, holidays, source = None, dict(BUILTIN_HOLIDAYS), "builtin"
-    if (EXT / "weather.json").exists():
-        weather = {k: v["precipitation_mm"] for k, v in
-                   json.loads((EXT / "weather.json").read_text(encoding="utf-8"))["daily"].items()}
-        source = "Open-Meteo"
-    if (EXT / "holidays.json").exists():
-        holidays = json.loads((EXT / "holidays.json").read_text(encoding="utf-8"))["dates"]
-    return weather, holidays, source
 
 
 def synthetic_weather(rng):
@@ -178,10 +164,7 @@ def main():
     args = ap.parse_args()
     rng = random.Random(args.seed)
 
-    weather, holidays, wsource = load_external()
-    if weather is None:
-        weather = synthetic_weather(random.Random(args.seed + 1))
-        wsource = "synthetic"
+    weather = synthetic_weather(random.Random(args.seed + 1))
 
     for d in (SRC, ANS):
         shutil.rmtree(d, ignore_errors=True)
@@ -202,7 +185,7 @@ def main():
         menu_today = [m for m in menu_all if available(m, day)]
         slips = []
         for session in ("lunch", "dinner"):
-            for _ in range(slip_count(rng, day, session, weather.get(iso, 0.0), iso in holidays)):
+            for _ in range(slip_count(rng, day, session, weather.get(iso, 0.0), iso in HOLIDAYS)):
                 slips.append((arrival(rng, day, session), session))
         slips.sort()
 
@@ -250,9 +233,9 @@ def main():
     write_staff(SRC / "staff.xlsx")
     (SRC / "seats.txt").write_text("".join(f"{c},{k},{n}\r\n" for c, k, n in SEATS), encoding="utf-8")
 
-    write_answers(rows_all, defects, wsource, weather, holidays, args.seed)
+    write_answers(rows_all, defects, weather, args.seed)
     print(f"days={len({r['伝票番号'][:8] for r in rows_all})} slips={len({r['伝票番号'] for r in rows_all})} "
-          f"rows={len(rows_all)} weather={wsource}")
+          f"rows={len(rows_all)}")
 
 
 def fmt_money(v):
@@ -299,7 +282,7 @@ def write_csv(path, header, rows):
         w.writerows(rows)
 
 
-def write_answers(rows, defects, wsource, weather, holidays, seed):
+def write_answers(rows, defects, weather, seed):
     slips = {}
     for r in rows:
         slips.setdefault(r["伝票番号"], r)
@@ -367,8 +350,8 @@ def write_answers(rows, defects, wsource, weather, holidays, seed):
     lines = [
         "# 正解データ・不備一覧（講師用。研修生に渡さない）", "",
         f"- 生成シード: {seed}",
-        f"- 天気データ: {wsource}" + ("（実データではない。fetch_external.py 実行後に再生成すること）" if wsource == "synthetic" else ""),
-        f"- 祝日: {', '.join(f'{k} {v}' for k, v in sorted(holidays.items()) if '2026-08' <= k <= '2026-09-30')}",
+        "- 天気（降水量）: 乱数による架空の値。来客数の増減要因としてのみ使用し、1次データには含めない",
+        f"- 祝日: {', '.join(f'{k} {v}' for k, v in sorted(HOLIDAYS.items()))}",
         f"- 期間売上合計（D-03 の重複ファイルを除外、取消は相殺）: {sales_total:,} 円",
         f"- 伝票数: {len(slips):,} / 明細行: {len(rows):,}", "",
         "## 不備（data-flow.md 4章）", "",

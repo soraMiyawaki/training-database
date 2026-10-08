@@ -141,10 +141,9 @@ W4–W5 の 2 週間で取込と集計 SQL の両方が収まるかは未検証�
 
 ## 7. 生成済みデータ
 
-`tools/datagen/` のスクリプトで生成済み。手順・実データ（API）の扱いは `tools/datagen/README.md`。
+`tools/datagen/` のスクリプトで生成済み。すべて架空のデータ。手順は `tools/datagen/README.md`。
 
 | 置き場所 | 内容 | 研修生に渡すか |
 |---|---|---|
 | `data/source/` | 1次データ（レジ CSV 49 日分＋重複 1、menu.xlsx、staff.xlsx、seats.txt） | 渡す |
 | `data/answer/` | 不備の該当伝票、R-01〜R-06 の正解値 | **渡さない** |
-| `data/external/` | API で取得した天気・祝日（取得後に作成される） | 渡さない |
